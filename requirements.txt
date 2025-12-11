@@ -1,8 +1,9 @@
-Flask==3.0.0
-flask-cors==4.0.0
-gunicorn==21.2.0
-requests==2.31.0
-google-cloud-vision==3.7.2
-groq==0.4.2
-numpy==1.26.0
-opencv-python-headless==4.8.1.78
+Flask
+flask-cors
+gunicorn
+requests
+google-cloud-vision
+groq
+# O Numpy 2.0 mudou muita coisa, então travamos abaixo dele para garantir compatibilidade
+numpy<2.0.0
+opencv-python-headless
