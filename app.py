@@ -12,7 +12,6 @@ from groq import Groq
 app = Flask(__name__)
 CORS(app)
 
-<<<<<<< HEAD
 # --- CONFIGURAÇÃO DE CHAVES E AMBIENTE ---
 
 # 1. Configuração da Credencial do Google (Secret File no Render)
@@ -24,8 +23,6 @@ if os.path.exists(google_creds_path):
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = google_creds_path
 else:
     # Se não encontrar (ambiente local), apenas avisa. 
-    # Se você tiver a chave localmente, pode descomentar a linha abaixo e ajustar o caminho:
-    # os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "caminho/local/para/sua/chave.json"
     print(f"Aviso: Arquivo de credenciais não encontrado em {google_creds_path}.")
 
 # 2. Leitura das Chaves de API (Variáveis de Ambiente)
@@ -33,7 +30,7 @@ else:
 GEMINI_KEY = os.environ.get("GEMINI_KEY")
 GROQ_KEY = os.environ.get("GROQ_KEY")
 
-# Verifica se as chaves foram carregadas corretamente para evitar erros silenciosos
+# Verifica se as chaves foram carregadas corretamente
 if not GEMINI_KEY:
     print("⚠️ AVISO: GEMINI_KEY não encontrada nas variáveis de ambiente.")
 if not GROQ_KEY:
@@ -48,16 +45,14 @@ try:
 except Exception as e:
     print(f"Erro ao iniciar Vision Client (verifique as credenciais): {e}")
     vision_client = None
-=======
-# --- CONFIGURAÇÃO DE CHAVES ---
-
-vision_client = vision.ImageAnnotatorClient()
-
-
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
 
 # Inicializa cliente Groq
-groq_client = Groq(api_key=GROQ_KEY)
+# Se a chave não existir, o cliente pode falhar ao ser usado, trataremos isso nas funções
+try:
+    groq_client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+except Exception as e:
+    print(f"Erro ao iniciar Groq Client: {e}")
+    groq_client = None
 
 # ==========================================
 # FUNÇÃO AUXILIAR: REDIMENSIONAMENTO
@@ -65,7 +60,6 @@ groq_client = Groq(api_key=GROQ_KEY)
 def resize_image(image_bytes, max_dimension=768):
     """
     Redimensiona a imagem mantendo a proporção para economizar tokens.
-    Ideal para Groq que tem limite baixo de tokens por minuto.
     """
     try:
         # Converte bytes para imagem OpenCV
@@ -98,14 +92,11 @@ def resize_image(image_bytes, max_dimension=768):
 # CAMADA 1: GEMINI 2.5 FLASH
 # ==========================================
 def call_gemini_primary(image_bytes, item_name):
-<<<<<<< HEAD
     if not GEMINI_KEY:
         print("Gemini pulado: chave não configurada.")
         return None
 
-=======
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
-    # Redimensionamos também para o Gemini para ele responder mais rápido (latência menor)
+    # Redimensionamos também para o Gemini para ele responder mais rápido
     optimized_image = resize_image(image_bytes, max_dimension=1024)
     
     print(f"1️⃣ Tentando Gemini 2.5 para: {item_name}...")
@@ -132,30 +123,24 @@ def call_gemini_primary(image_bytes, item_name):
         if r.status_code == 200:
             clean = r.json()["candidates"][0]["content"]["parts"][0]["text"].replace("```json", "").replace("```", "").strip()
             return int(json.loads(clean).get("count", 0))
-<<<<<<< HEAD
         else:
             print(f"Erro na resposta do Gemini: {r.text}")
-=======
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
     except Exception as e:
         print(f"⚠️ Gemini falhou: {e}")
     
     return None
 
 # ==========================================
-# CAMADA 2: GROQ / LLAMA 4 VISION (Atualizado Dez/2025)
+# CAMADA 2: GROQ / LLAMA 4 VISION
 # ==========================================
 def call_groq_secondary(image_bytes, item_name):
-<<<<<<< HEAD
-    if not GROQ_KEY:
-        print("Groq pulado: chave não configurada.")
+    if not groq_client:
+        print("Groq pulado: cliente ou chave não configurados.")
         return None
 
-=======
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
     print(f"2️⃣ Tentando Groq (Llama 4 Scout) para: {item_name}...")
     
-    # Redimensiona para economizar tokens (Llama 4 aceita até 20MB, mas tokens ainda contam)
+    # Redimensiona para economizar tokens
     optimized_image = resize_image(image_bytes, max_dimension=768)
     
     base64_image = base64.b64encode(optimized_image).decode('utf-8')
@@ -172,9 +157,7 @@ def call_groq_secondary(image_bytes, item_name):
                     ],
                 }
             ],
-            # MODELO ATUALIZADO (Substituto do 3.2-11b)
             model="meta-llama/llama-4-scout-17b-16e-instruct", 
-            
             temperature=0.1,
             max_tokens=100, 
             response_format={"type": "json_object"},
@@ -191,32 +174,25 @@ def call_groq_secondary(image_bytes, item_name):
 # CAMADA 3: VISION API (Fallback)
 # ==========================================
 def call_vision_fallback(content, user_input):
-<<<<<<< HEAD
     if not vision_client:
         print("Google Vision pulado: cliente não inicializado.")
         return None, []
 
     print("3️⃣ Tentando Google Vision API (Fallback)...")
-    # Vision cobra por requisição, não por tamanho, então enviamos a original (content) para máxima precisão
+    # Vision cobra por requisição, não por tamanho
     image = vision.Image(content=content)
     try:
         response = vision_client.object_localization(image=image)
     except Exception as e:
         print(f"Erro na chamada do Vision API: {e}")
         return None, []
-=======
-    print("3️⃣ Tentando Google Vision API (Fallback)...")
-    # Vision cobra por requisição, não por tamanho, então enviamos a original (content) para máxima precisão
-    image = vision.Image(content=content)
-    response = vision_client.object_localization(image=image)
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
     
     detected_objects = []
     
     for obj in response.localized_object_annotations:
         if obj.score < 0.60: continue
         
-        # Filtros geométricos básicos (Opcional: Refinar conforme necessidade)
+        # Filtros geométricos básicos
         box = obj.bounding_poly.normalized_vertices
         w = box[2].x - box[0].x
         # Exemplo: Ignora coisas gigantes que ocupam a tela toda (>90%)
@@ -263,26 +239,17 @@ def count_objects():
     # 3. Vision API (se ambos falharam)
     if final_count is None:
         final_count, boxes = call_vision_fallback(content, user_input)
-<<<<<<< HEAD
         if final_count is not None:
             provider = "google-vision-classic"
         else:
-            # Se até o Vision falhou, retorna 0
             final_count = 0
             provider = "failed-all"
-=======
-        provider = "google-vision-classic"
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
     
     # --- GERAÇÃO DA RESPOSTA VISUAL ---
-    # Usamos a imagem ORIGINAL para desenhar e devolver ao usuário (melhor qualidade)
+    # Usamos a imagem ORIGINAL para desenhar
     img = cv2.imdecode(np.frombuffer(content, np.uint8), cv2.IMREAD_COLOR)
     
-<<<<<<< HEAD
     if "vision-classic" not in provider and final_count > 0:
-=======
-    if "vision-classic" not in provider and final_count is not None:
->>>>>>> fec157175229c2e5da8f394d2b1e6f4ba2d90436
         # Desenha número gigante (IAs Generativas)
         text = str(final_count)
         font_scale = 5
@@ -290,7 +257,7 @@ def count_objects():
         text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, font_scale, thickness)[0]
         text_x = (img.shape[1] - text_size[0]) // 2
         text_y = (img.shape[0] + text_size[1]) // 2
-        # Sombra preta para contraste
+        # Sombra preta
         cv2.putText(img, text, (text_x+5, text_y+5), cv2.FONT_HERSHEY_DUPLEX, font_scale, (0,0,0), thickness+4)
         # Texto verde
         cv2.putText(img, text, (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX, font_scale, (0, 255, 0), thickness)
